@@ -79,9 +79,9 @@ resource "aws_cognito_user_pool" "pool" {
   schema {
     attribute_data_type      = "String"
     developer_only_attribute = false
-    name                     = "username"
+    name                     = "preferred_username"
     mutable                  = true
-    required                 = true
+    required                 = false
   }
 
   schema {
@@ -141,6 +141,8 @@ resource "aws_cognito_user_pool_client" "isolutionzClient" {
   callback_urls = [local.domain]
 
   supported_identity_providers = var.identity_providers
+
+  depends_on = [aws_cognito_identity_provider.google_provider]
 }
 
 #User Pool Domain
@@ -162,7 +164,7 @@ resource "aws_cognito_identity_provider" "google_provider" {
 
   attribute_mapping = {
     email    = "email"
-    username = "sub"
+    preferred_username = "sub"
     "custom:full_names"  = "name"
   }
 }
@@ -182,9 +184,18 @@ resource "aws_cognito_identity_provider" "microsoft_provider" {
 
   attribute_mapping = {
     email      = "email"
-    username   = "sub"
+    preferred_username   = "sub"
     full_names = "name"
   }
+}
+
+
+resource "aws_cognito_user_group" "googleExternalUsers" {
+  name         = "googleUsers"
+  user_pool_id = aws_cognito_user_pool.pool.id
+  description  = "User Group for users authenticated via google oauth and account created on cognito"
+  precedence   = 42
+  role_arn     = aws_iam_role.auth_iam_role.arn
 }
 
 
@@ -196,10 +207,9 @@ resource "aws_cognito_identity_pool" "isolutionz_auth" {
 
   cognito_identity_providers {
     client_id               = aws_cognito_user_pool_client.isolutionzClient.id
-    provider_name           = aws_cognito_identity_provider.google_provider.provider_name
+    provider_name           = aws_cognito_user_pool.pool.endpoint
     server_side_token_check = false
   }
-
 
   supported_login_providers = {
     "accounts.google.com" = var.google_client_id
@@ -211,7 +221,7 @@ resource "aws_cognito_identity_pool" "isolutionz_auth" {
 
 # Create Secrets in Secrets Manager
 resource "aws_secretsmanager_secret" "isolutionz_secrets" {
-  name        = local.app_name
+  name        = "${local.app_name}_secrets"
   description = "Secrets for Isolutionz"
 
   tags = {
@@ -223,13 +233,9 @@ resource "aws_secretsmanager_secret" "isolutionz_secrets" {
 
 resource "aws_secretsmanager_secret_version" "isolutionz_secrets_version" {
   secret_id     = aws_secretsmanager_secret.isolutionz_secrets.id
-  secret_string = jsonencode({
-    userPoolID  = aws_cognito_user_pool.pool.id,
-    clientId    = aws_cognito_user_pool_client.isolutionzClient.id,
-    secretHash  = aws_cognito_user_pool_client.isolutionzClient.client_secret,
-    tenantId    = "74b95e6b-d4f6-4704-8070-813c22897ab7",
-  })
+  secret_string = jsonencode(merge(local.redis_config_json, { tenantId = var.tenant_id }))
 }
+
 
 # Random password for secretHash
 resource "random_password" "random_secret" {
@@ -291,7 +297,7 @@ EOF
         "s3:GetObject",
         "s3:PutObject"
       ],
-      "Resource": "arn:aws:s3:::your-s3-bucket-name/*"
+      "Resource": "*"
     }
   ]
 }

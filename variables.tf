@@ -6,6 +6,22 @@
 #terraform state rm aws_cognito_user_group.CognitoRegisteredUsers
 
 
+variable "azure_client_ssm" {
+  description = "Azure Client ID SSM Path"
+  type        = string
+  default = "/azure/client_id"
+}
+
+variable "azure_client_secret_ssm" {
+  description = "Azure Secret SSM Path"
+  type        = string
+  default = "/azure/client_secret"
+}
+variable "redis_config_ssm" {
+  description = "Redis Config SSM Path"
+  type        = string
+  default = "/redis/cloud/configs"
+}
 
 variable "google_client_id" {
   description = "Google OAuth client ID"
@@ -35,6 +51,36 @@ variable "url" {
   type = string
 }
 
+variable "vpc_cidr" {
+  description = "Isolutions VPC CIDR"
+  type = string
+  default = "10.0.0.0/16"
+}
+
+variable "auth_service_prefix" {
+  description = "Auth Service Identifier"
+  type = string
+  default = "authService"
+}
+
+variable "auth_service_cloudmap_domain" {
+  description = "Auth Service Cloudmap Domain"
+  type = string
+  default = "isolutionz.local"
+}
+
+variable "auth_service_mesh_name" {
+  description = "Auth Service Aws Mesh Name"
+  type = string
+  default = "isolutionz_microservices_mesh"
+}
+
+variable "aws_region_name" {
+  description = "AWS Region Name"
+  type = string
+  default = "eu-west-1"
+}
+
 variable "env" {
   description = "Application Environment"
   type = string
@@ -44,4 +90,5 @@ locals {
   #email_address = "${var.first_name}.${var.last_name}@company.com" => Dynamic Local Variables
   domain = var.url
   app_name = "${var.env}-Isolutionz"
+  redis_config_json = jsondecode(data.aws_ssm_parameter.redis_config.value)
 }
