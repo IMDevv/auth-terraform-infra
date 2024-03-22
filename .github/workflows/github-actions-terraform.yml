@@ -1,0 +1,48 @@
+name: Deploy AWS Resources with Terraform for Isolutionz Auth Service
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'dev/**' # Trigger only when changes are made in the dev branch
+    types: [closed] # Trigger only on pull request closure
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5 # Specify the version of Terraform you want to use
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4.0.2
+        with:
+          role-to-assume: ${{ secrets.IAM_ROLE }}
+          role-session-name: AWSSession
+          aws-region: eu-west-1
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan -input=false
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action == 'closed')
+        run: terraform apply -input=false tfplan
+        env:
+          TF_CLI_ARGS: "-auto-approve"
+
+      - name: Terraform Destroy
+        if: github.event_name == 'pull_request' && github.event.action == 'closed'
+        run: terraform destroy -auto-approve
